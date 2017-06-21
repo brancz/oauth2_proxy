@@ -54,6 +54,7 @@ type OAuthProxy struct {
 	AuthOnlyPath      string
 
 	redirectURL         *url.URL // the url to receive requests at
+	externalURL         *url.URL
 	provider            providers.Provider
 	ProxyPrefix         string
 	SignInMessage       string
@@ -154,6 +155,10 @@ func NewOAuthProxy(opts *Options, validator func(string) bool) *OAuthProxy {
 	redirectURL := opts.redirectURL
 	redirectURL.Path = fmt.Sprintf("%s/callback", opts.ProxyPrefix)
 
+	if opts.externalURL.Path != "" {
+		redirectURL.Path = opts.externalURL.Path + redirectURL.Path
+	}
+
 	log.Printf("OAuthProxy configured for %s Client ID: %s", opts.provider.Data().ProviderName, opts.ClientID)
 	domain := opts.CookieDomain
 	if domain == "" {
@@ -193,6 +198,7 @@ func NewOAuthProxy(opts *Options, validator func(string) bool) *OAuthProxy {
 		OAuthStartPath:    fmt.Sprintf("%s/start", opts.ProxyPrefix),
 		OAuthCallbackPath: fmt.Sprintf("%s/callback", opts.ProxyPrefix),
 		AuthOnlyPath:      fmt.Sprintf("%s/auth", opts.ProxyPrefix),
+		externalURL:       opts.externalURL,
 
 		ProxyPrefix:        opts.ProxyPrefix,
 		provider:           opts.provider,
@@ -364,15 +370,20 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 	p.ClearSessionCookie(rw, req)
 	rw.WriteHeader(code)
 
-	redirect_url := req.URL.RequestURI()
+	redirectUrl := req.URL.RequestURI()
 	if req.Header.Get("X-Auth-Request-Redirect") != "" {
-		redirect_url = req.Header.Get("X-Auth-Request-Redirect")
+		redirectUrl = req.Header.Get("X-Auth-Request-Redirect")
 	}
-	if redirect_url == p.SignInPath {
-		redirect_url = "/"
+	if redirectUrl == p.SignInPath {
+		redirectUrl = "/"
+	}
+
+	if p.externalURL.Path != "" {
+		redirectUrl = p.externalURL.Path
 	}
 
 	t := struct {
+		ExternalURL   string
 		ProviderName  string
 		SignInMessage string
 		CustomLogin   bool
@@ -381,10 +392,11 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 		ProxyPrefix   string
 		Footer        template.HTML
 	}{
+		ExternalURL:   p.externalURL.String(),
 		ProviderName:  p.provider.Data().ProviderName,
 		SignInMessage: p.SignInMessage,
 		CustomLogin:   p.displayCustomLoginForm(),
-		Redirect:      redirect_url,
+		Redirect:      redirectUrl,
 		Version:       VERSION,
 		ProxyPrefix:   p.ProxyPrefix,
 		Footer:        template.HTML(p.Footer),
@@ -497,6 +509,7 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 		p.ErrorPage(rw, 500, "Internal Error", err.Error())
 		return
 	}
+	log.Printf("setting nonce to: %s", nonce)
 	p.SetCSRFCookie(rw, req, nonce)
 	redirect, err := p.GetRedirect(req)
 	if err != nil {
@@ -544,6 +557,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	p.ClearCSRFCookie(rw, req)
 	if c.Value != nonce {
 		log.Printf("%s csrf token mismatch, potential attack", remoteAddr)
+		log.Printf("got %s expected %s", c.Value, nonce)
 		p.ErrorPage(rw, 403, "Permission Denied", "csrf failed")
 		return
 	}

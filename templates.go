@@ -110,7 +110,7 @@ func getTemplates() *template.Template {
 </head>
 <body>
 	<div class="signin center">
-	<form method="GET" action="{{.ProxyPrefix}}/start">
+	<form method="GET" action="{{.ExternalURL}}{{.ProxyPrefix}}/start">
 	<input type="hidden" name="rd" value="{{.Redirect}}">
 	{{ if .SignInMessage }}
 	<p>{{.SignInMessage}}</p>

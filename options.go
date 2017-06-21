@@ -20,6 +20,7 @@ import (
 
 // Configuration Options that can be set by Command Line Flag, or Config File
 type Options struct {
+	ExternalURL  string `flag:"external-url" cfg:"external-url"`
 	ProxyPrefix  string `flag:"proxy-prefix" cfg:"proxy-prefix"`
 	HttpAddress  string `flag:"http-address" cfg:"http_address"`
 	HttpsAddress string `flag:"https-address" cfg:"https_address"`
@@ -80,6 +81,7 @@ type Options struct {
 
 	// internal values that are set after config validation
 	redirectURL   *url.URL
+	externalURL   *url.URL
 	proxyURLs     []*url.URL
 	CompiledRegex []*regexp.Regexp
 	provider      providers.Provider
@@ -165,6 +167,7 @@ func (o *Options) Validate() error {
 	}
 
 	o.redirectURL, msgs = parseURL(o.RedirectURL, "redirect", msgs)
+	o.externalURL, msgs = parseURL(o.ExternalURL, "external", msgs)
 
 	for _, u := range o.Upstreams {
 		upstreamURL, err := url.Parse(u)
