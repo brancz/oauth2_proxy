@@ -141,6 +141,13 @@ func (o *Options) Validate() error {
 		msgs = append(msgs, "missing setting for email validation: email-domain or authenticated-emails-file required.\n      use email-domain=* to authorize all email addresses")
 	}
 
+	if o.SSLInsecureSkipVerify {
+		insecureTransport := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		http.DefaultClient = &http.Client{Transport: insecureTransport}
+	}
+
 	if o.OIDCIssuerURL != "" {
 		// Configure discoverable provider data.
 		provider, err := oidc.NewProvider(context.Background(), o.OIDCIssuerURL)
@@ -229,13 +236,6 @@ func (o *Options) Validate() error {
 
 	msgs = parseSignatureKey(o, msgs)
 	msgs = validateCookieName(o, msgs)
-
-	if o.SSLInsecureSkipVerify {
-		insecureTransport := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		http.DefaultClient = &http.Client{Transport: insecureTransport}
-	}
 
 	if len(msgs) != 0 {
 		return fmt.Errorf("Invalid configuration:\n  %s",
